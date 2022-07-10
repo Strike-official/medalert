@@ -1,0 +1,10 @@
+mysql_config = {
+    "host": "",
+    "user": "",
+    "password": "",
+    "db": "",
+}
+
+port=5001
+admin_phone_number = ["",""]
+baseAPI = ""
