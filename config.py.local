@@ -6,5 +6,18 @@ mysql_config = {
 }
 
 port=5001
-admin_phone_number = ["",""]
 baseAPI = ""
+
+telegram_config ={
+    "token" : "",
+    "reciever_ids" : [""],
+}
+
+calling_service = {
+    "to_number" : "",
+    "caller_id" : "",
+    "url" : "",
+    "flow_url": ""
+}
+
+admin_phone_number = [""]
