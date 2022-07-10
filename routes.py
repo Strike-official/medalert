@@ -101,6 +101,9 @@ def respondBack():
 ## get_ambulance_data fetches the ambulace data and its stauts
 @app.route('/medalertBotAdmin/ambulance/get/all', methods=['POST'])
 def get_ambulance_data():
+    data = request.get_json()
+    user_phone_number = data["bybrisk_session_variables"]["phone"]
+
 
     vahicle_number = "NA"
 
@@ -112,10 +115,16 @@ def get_ambulance_data():
     ambulance_status_color = constants.unavailable_color
 
     answer_card = quesObj1.Answer(True).AnswerCardArray(strike.VERTICAL_ORIENTATION)
+    authorised = False
     for ambulance_data in ambulances_data:
 
         ## Skip if ambulace state is dead
         if ambulance_data[4] == constants.dead_state:
+            continue
+
+        ## Skip if the user is not a superUser or the Driver himself.
+        if (user_phone_number not in config.admin_phone_number) and (ambulance_data[3] != user_phone_number):
+            print("Unathorised - driverNumber="+ambulance_data[3]+" -UserPhoneNumber="+user_phone_number)
             continue
 
         ## Set available sign based on status
@@ -129,7 +138,13 @@ def get_ambulance_data():
                 AddTextRowToAnswer(strike.H3,ambulance_data[0]+constants.id_number_delimiter+ambulance_data[1],"Black",True).\
                 AddTextRowToAnswer(strike.H4,ambulance_data[4],ambulance_status_color,True).\
                 AddTextRowToAnswer(strike.H4,"Driver: "+ambulance_data[2],constants.plain_text_color,False)
-    
+        authorised = True
+    if not authorised:
+        answer_card = answer_card.AnswerCard().\
+                SetHeaderToAnswer(1,strike.HALF_WIDTH).\
+                AddTextRowToAnswer(strike.H3,"You are not authorised to perform this operation.","#ff3333",True)
+        # If unauthorised, Reset nextHandlerURL such that this is the last message.
+        strikeObj.meta_response_object["body"]["nextActionHandlerURL"]=""
     return jsonify(strikeObj.Data())
 
 ## set_ambulance_status sets the status of the ambulance to active
@@ -183,4 +198,4 @@ def response_ambulace_status_update():
     
     return jsonify(strikeObj.Data())
 
-app.run(host='0.0.0.0', port=5001)
+app.run(host='0.0.0.0', port=config.port)
