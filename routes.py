@@ -6,56 +6,76 @@ from flask import jsonify
 from flask import request
 import sql
 import constants
+import helper
+import telegram
+import call
 
 app = flask.Flask(__name__)
 app.config["DEBUG"] = True
 
-# The public API link of the hosted server has to be added here.
-# Use ngrok to easily make your api public
+
 baseAPI=config.baseAPI
-# hospital_data=sql.get_hospital_data()
 
-@app.route('/medalertBot/book/get/location', methods=['POST'])
-def book_get_location():
-    ## Create a strike object
-    strikeObj = strike.Create("getting_started",baseAPI+"/medalertBot/book/get/hospitals")
+#########################################
+######## Ambulance booking bot action handler #######
+#########################################
 
-
-    # First Question: Whats your name?
-    quesObj1 = strikeObj.Question("start_location").\
+@app.route('/medalertBot/ambulance/get/location', methods=['POST'])
+def get_location_for_booking():
+    strikeObj = strike.Create("book_ambulance",baseAPI+"/medalertBot/ambulance/book")
+    quesObj1 = strikeObj.Question("pickup_location").\
                 QuestionText().\
                 SetTextToQuestion("What's your location?")
     quesObj1.Answer(False).LocationInput("Select location here")
 
     return jsonify(strikeObj.Data())
 
-@app.route('/medalertBot/book/get/hospitals', methods=['POST'])
-def book_get_hospital():
+@app.route('/medalertBot/ambulance/book', methods=['POST'])
+def send_response():
 
     data = request.get_json()
-    latitude=data["bybrisk_session_variables"]["location"]["latitude"]
-    longitude=data["bybrisk_session_variables"]["location"]["longitude"]
-    print(latitude)
-    print(longitude)
 
-    print(hospital_data)
-    ## Create a strike object
-    strikeObj = strike.Create("getting_started",baseAPI+"/respondBack")
+    ## Check for available ambulances
+    available_ambulances = sql.get_available_ambulance()
+    print(available_ambulances)
 
+    strikeObj = strike.Create("getting_started", baseAPI+"/medalertBot/ambulance/get/location")
 
-    # Get data of all the hospitals found in 5km radius of the user
-    quesObj1 = strikeObj.Question("hospital_id").QuestionText().SetTextToQuestion("Select a hospital")
+    if helper.is_ambulance_available(available_ambulances):
+        selected_ambulance = helper.get_ambulace(available_ambulances)
+
+        ## Update status of ambulance to unavailable
+        sql.update_ambulance_state(constants.unavailable_state,selected_ambulance[1])
+
+        ## Push to telegram
+        telegram.send_notification(selected_ambulance,data)
     
-    answer_card = quesObj1.Answer(True).AnswerCardArray(strike.VERTICAL_ORIENTATION)
-    for i in hospital_data:
+        ## Send a call notification
+        call.call_notification()
+
+        ## Send response to user
+        question_card = strikeObj.Question("last_leg").\
+            QuestionCard().\
+            SetHeaderToQuestion(2,strike.HALF_WIDTH).\
+            AddTextRowToQuestion(strike.H4,"Your ambulance is on it's way",constants.available_color,True).\
+            AddTextRowToQuestion(strike.H4,"Ambulance no. - "+selected_ambulance[1]+" ",constants.plain_text_color,False).\
+            AddTextRowToQuestion(strike.H4,"Contact no. - "+config.calling_service['to_number'],constants.plain_text_color,False)
+
+        answer_card = question_card.Answer(False).AnswerCardArray(strike.VERTICAL_ORIENTATION)
         answer_card = answer_card.AnswerCard().\
-            SetHeaderToAnswer(1,strike.FULL_WIDTH).\
-            AddTextRowToAnswer(strike.H4,i[1],"Black",True).\
-            AddTextRowToAnswer(strike.H5,i[5],"#757574",False).\
-            AddTextRowToAnswer(strike.H5,"📍 "+i[2],"black",False).\
-            AddTextRowToAnswer(strike.H5,i[7],"black",False).\
-            AddTextRowToAnswer(strike.H4,"22 min","#d93025",True).\
-            AddTextRowToAnswer(strike.H4,"3.7 km","#70757a",True)
+            SetHeaderToAnswer(1,strike.HALF_WIDTH).\
+            AddTextRowToAnswer(strike.H4,constants.back_handler,"Black",True)   
+
+    else:
+        question_card = strikeObj.Question("last_leg").\
+            QuestionCard().\
+            SetHeaderToQuestion(2,strike.HALF_WIDTH).\
+            AddTextRowToQuestion(strike.H4,"Sorry! all of our ambulances are busy at this moment.",constants.sorry_color,True)
+
+        answer_card = question_card.Answer(False).AnswerCardArray(strike.VERTICAL_ORIENTATION)
+        answer_card = answer_card.AnswerCard().\
+            SetHeaderToAnswer(1,strike.HALF_WIDTH).\
+            AddTextRowToAnswer(strike.H4,constants.back_handler,"Black",True)
 
     return jsonify(strikeObj.Data())
 
@@ -166,7 +186,7 @@ def response_ambulace_status_update():
        ambulance_state = constants.available_state
 
     ## Update status of ambulance
-    sql.update_ambulance_data(ambulance_state,vehicle_number)
+    sql.update_ambulance_state(ambulance_state,vehicle_number)
 
     strikeObj = strike.Create("getting_started", baseAPI+"/medalertBotAdmin/ambulance/get/all")
     quesObj1 = strikeObj.Question("response").QuestionText().SetTextToQuestion("Status of " + ambulance_id + "(" + vehicle_number + ") updated to " + ambulance_state)
