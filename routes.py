@@ -23,10 +23,15 @@ baseAPI=config.baseAPI
 @app.route('/medalertBot/ambulance/get/location', methods=['POST'])
 def get_location_for_booking():
     strikeObj = strike.Create("book_ambulance",baseAPI+"/medalertBot/ambulance/book")
-    quesObj1 = strikeObj.Question("pickup_location").\
+    quesObj1 = strikeObj.Question("pickup_address").\
+                QuestionText().\
+                SetTextToQuestion("Please enter your address?")
+    quesObj1.Answer(False).TextInput()
+
+    quesObj2 = strikeObj.Question("pickup_location").\
                 QuestionText().\
                 SetTextToQuestion("What's your location?")
-    quesObj1.Answer(False).LocationInput("Select location here")
+    quesObj2.Answer(False).LocationInput("Select location here")
 
     return jsonify(strikeObj.Data())
 
@@ -51,7 +56,7 @@ def send_response():
         telegram.send_notification(selected_ambulance,data)
     
         ## Send a call notification
-        call.call_notification()
+        call.call_notification(selected_ambulance[3], data["bybrisk_session_variables"]["phone"])
 
         ## Send response to user
         question_card = strikeObj.Question("last_leg").\
