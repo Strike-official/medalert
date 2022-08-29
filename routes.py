@@ -94,6 +94,33 @@ def respondBack():
 
     return jsonify(strikeObj.Data())
 
+@app.route('/medalertBot/history', methods=['POST'])
+def show_history():
+    data = request.get_json()
+    name=data["bybrisk_session_variables"]["username"]
+    user_id=data["bybrisk_session_variables"]["userId"]
+
+    ## Get user booking history
+    ambulance_details = sql.get_booking_history(user_id,name)
+    
+    strikeObj = strike.Create("getting_started", baseAPI)
+
+    question_card = strikeObj.Question("").\
+                QuestionText().\
+                SetTextToQuestion("Hi! " + name + " below is your ambulance booking history")
+
+    answer_card = question_card.Answer(False).AnswerCardArray(strike.VERTICAL_ORIENTATION)
+
+    for ambulance_detail in ambulance_details:
+        answer_card = answer_card.AnswerCard().\
+            SetHeaderToAnswer(10,strike.HALF_WIDTH).\
+            AddTextRowToAnswer(strike.H4,"Driver Name: "+ambulance_detail[2],"Black",True).\
+            AddTextRowToAnswer(strike.H4,ambulance_detail[3],"#4839bd",False).\
+            AddTextRowToAnswer(strike.H4,"Vehicle No. "+ambulance_detail[1],"Black",False).\
+            AddTextRowToAnswer(strike.H5,"Booked on. "+str(ambulance_detail[13]),"#687987",False)
+
+    return jsonify(strikeObj.Data())
+
 #########################################
 ######## Admin bot action handler #######
 #########################################
