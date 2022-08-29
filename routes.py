@@ -23,20 +23,44 @@ baseAPI=config.baseAPI
 @app.route('/medalertBot/ambulance/get/location', methods=['POST'])
 def get_location_for_booking():
     strikeObj = strike.Create("book_ambulance",baseAPI+"/medalertBot/ambulance/book")
-    quesObj1 = strikeObj.Question("pickup_location").\
-                QuestionText().\
-                SetTextToQuestion("What's your location?")
-    quesObj1.Answer(False).LocationInput("Select location here")
+
+    ## Check for available ambulances
+    ambulance_category = sql.get_available_ambulance_category()
+    print(ambulance_category, len(ambulance_category))
+
+    # If there are no available ambulances, then show not available message.
+    if len(ambulance_category) > 0:
+        quesObj1 = strikeObj.Question("pickup_address").\
+                    QuestionText().\
+                    SetTextToQuestion("Please enter your address?")
+        quesObj1.Answer(False).TextInput()
+
+        quesObj2 = strikeObj.Question("pickup_location").\
+                    QuestionText().\
+                    SetTextToQuestion("What's your location?")
+        quesObj2.Answer(False).LocationInput("Select location here")
+
+        quesObj3 = strikeObj.Question("ambulance_category").\
+                    QuestionCard().SetHeaderToQuestion(1, strike.FULL_WIDTH).AddTextRowToQuestion(strike.H4, "Please select an Ambulance category!", "black", False)
+        answer_object = quesObj3.Answer(False).AnswerCardArray(strike.VERTICAL_ORIENTATION)
+
+        for category in ambulance_category:
+            if category[0] != None:
+                answer_object = answer_object.AnswerCard().SetHeaderToAnswer(1, strike.HALF_WIDTH).AddTextRowToAnswer(strike.H4, category[0], "black", True)
+    else:
+        question_card = strikeObj.Question("last_leg").\
+            QuestionCard().\
+            SetHeaderToQuestion(2,strike.HALF_WIDTH).\
+            AddTextRowToQuestion(strike.H4,"Sorry! all of our ambulances are busy at this moment.",constants.sorry_color,True)
 
     return jsonify(strikeObj.Data())
 
 @app.route('/medalertBot/ambulance/book', methods=['POST'])
 def send_response():
-
     data = request.get_json()
 
     ## Check for available ambulances
-    available_ambulances = sql.get_available_ambulance()
+    available_ambulances = sql.get_available_ambulance(data["user_session_variables"]["ambulance_category"][0])
     print(available_ambulances)
 
     strikeObj = strike.Create("getting_started", baseAPI+"/medalertBot/ambulance/get/location")
@@ -46,12 +70,13 @@ def send_response():
 
         ## Update status of ambulance to unavailable
         sql.update_ambulance_state(constants.unavailable_state,selected_ambulance[1])
+        sql.store_ambulance_booking(data["bybrisk_session_variables"]["userId"],selected_ambulance[0],data["user_session_variables"]["pickup_location"]["latitude"],data["user_session_variables"]["pickup_location"]["longitude"],data["user_session_variables"]["pickup_address"])
 
         ## Push to telegram
         telegram.send_notification(selected_ambulance,data)
-    
+
         ## Send a call notification
-        call.call_notification()
+        call.call_notification(selected_ambulance[3], data["bybrisk_session_variables"]["phone"])
 
         ## Send response to user
         question_card = strikeObj.Question("last_leg").\
@@ -62,6 +87,15 @@ def send_response():
             AddTextRowToQuestion(strike.H4,"Contact no. - "+config.calling_service['to_number'],constants.plain_text_color,False)
 
         answer_card = question_card.Answer(False).AnswerCardArray(strike.VERTICAL_ORIENTATION)
+        ambulanceImgs = selected_ambulance[5]
+        if ambulanceImgs!=None:
+            imgs = ambulanceImgs.split("|")
+            print(imgs)
+            for i in imgs:
+                answer_card = answer_card.AnswerCard().\
+                    SetHeaderToAnswer(99999,strike.FULL_WIDTH).\
+                    AddGraphicRowToAnswer(strike.PICTURE_ROW, [i], [])
+
         answer_card = answer_card.AnswerCard().\
             SetHeaderToAnswer(1,strike.HALF_WIDTH).\
             AddTextRowToAnswer(strike.H4,constants.back_handler,"Black",True)   
@@ -85,7 +119,7 @@ def respondBack():
     data = request.get_json()
     name=data["user_session_variables"]["name"]
     dob=data["user_session_variables"]["dob"][0]
-    
+
     strikeObj = strike.Create("getting_started", baseAPI)
 
     question_card = strikeObj.Question("").\
@@ -130,7 +164,6 @@ def show_history():
 def get_ambulance_data():
     data = request.get_json()
     user_phone_number = data["bybrisk_session_variables"]["phone"]
-
 
     vahicle_number = "NA"
 

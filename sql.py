@@ -35,10 +35,10 @@ def update_ambulance_state(state,vehicle_number):
   mydb.commit()
   print("[DB TOUCH] updated status of "+vehicle_number+" to "+state)
 
-def get_available_ambulance():
+def get_available_ambulance(category):
   mydb.reconnect()
   mycursor = mydb.cursor()
-  mycursor.execute("select * from med_alert_ambulance_details where state='available';")
+  mycursor.execute("select * from med_alert_ambulance_details where state='available' AND ambulance_type_tag='"+category+"';")
   myresult = mycursor.fetchall()
   mydb.commit()
   print("[DB TOUCH] fetched available ambulances")
@@ -52,3 +52,20 @@ def get_ambulance_by_id(ambulance_id):
   mydb.commit()
   print("[DB TOUCH] fetched ambulances with id: "+ambulance_id)
   return myresult
+
+def get_available_ambulance_category():
+  mydb.reconnect()
+  mycursor = mydb.cursor()
+  mycursor.execute("select DISTINCT(ambulance_type_tag) from med_alert_ambulance_details where state='available';")
+  myresult = mycursor.fetchall()
+  mydb.commit()
+  print("[DB TOUCH] fetched get_available_ambulance_category")
+  return myresult
+
+def store_ambulance_booking(userId,ambulanceID,lat,long,pickupAddr):
+  mydb.reconnect()
+  mycursor = mydb.cursor()
+  sql = "INSERT INTO med_alert_booking_detail (user_id,ambulance_id,latitude,longitude,address) values ('"+userId+"','"+ambulanceID+"','"+str(lat)+"','"+str(long)+"','"+pickupAddr+"');"
+  mycursor.execute(sql)
+  mydb.commit()
+  print("[DB TOUCH] Added store_ambulance_booking of "+ambulanceID+" for "+userId+" @ "+pickupAddr)
